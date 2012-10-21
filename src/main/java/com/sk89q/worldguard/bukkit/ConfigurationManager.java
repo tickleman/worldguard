@@ -24,6 +24,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 import com.sk89q.commandbook.CommandBook;
 import com.sk89q.commandbook.GodComponent;
@@ -73,7 +75,7 @@ public class ConfigurationManager {
     /**
      * Holds configurations for different worlds.
      */
-    private Map<String, WorldConfiguration> worlds;
+    private ConcurrentMap<String, WorldConfiguration> worlds;
 
     /**
      * The global configuration for use when loading worlds
@@ -90,14 +92,16 @@ public class ConfigurationManager {
      * List of people who can breathe underwater.
      */
     private Set<String> hasAmphibious = new HashSet<String>();
-    
+
     private boolean hasCommandBookGodMode = false;
 
     public boolean useRegionsScheduler;
+    public boolean useRegionsCreatureSpawnEvent;
     public boolean activityHaltToggle = false;
     public boolean autoGodMode;
     public boolean usePlayerMove;
-    
+    public Map<String, String> hostKeys = new HashMap<String, String>();
+
     /**
      * Region Storage Configuration method, and config values
      */
@@ -113,12 +117,13 @@ public class ConfigurationManager {
      */
     public ConfigurationManager(WorldGuardPlugin plugin) {
         this.plugin = plugin;
-        this.worlds = new HashMap<String, WorldConfiguration>();
+        this.worlds = new ConcurrentHashMap<String, WorldConfiguration>();
     }
 
     /**
      * Load the configuration.
      */
+    @SuppressWarnings("unchecked")
     public void load() {
         // Create the default configuration file
         plugin.createDefaultConfiguration(
@@ -131,14 +136,29 @@ public class ConfigurationManager {
             plugin.getLogger().severe("Error reading configuration for global config: ");
             e.printStackTrace();
         }
-        
+
         config.removeProperty("suppress-tick-sync-warnings");
         useRegionsScheduler = config.getBoolean(
                 "regions.use-scheduler", true);
+        useRegionsCreatureSpawnEvent = config.getBoolean(
+                "regions.use-creature-spawn-event", true);
         autoGodMode = config.getBoolean(
                 "auto-invincible", config.getBoolean("auto-invincible-permission", false));
+        config.removeProperty("auto-invincible-permission");
         usePlayerMove = config.getBoolean(
                 "use-player-move-event", true);
+
+        hostKeys = new HashMap<String, String>();
+        Object hostKeysRaw = config.getProperty("host-keys");
+        if (hostKeysRaw == null || !(hostKeysRaw instanceof Map)) {
+            config.setProperty("host-keys", new HashMap<String, String>());
+        } else {
+            for (Map.Entry<Object, Object> entry : ((Map<Object, Object>) hostKeysRaw).entrySet()) {
+                String key = String.valueOf(entry.getKey());
+                String value = String.valueOf(entry.getValue());
+                hostKeys.put(key.toLowerCase(), value);
+            }
+        }
 
         useSqlDatabase = config.getBoolean(
                 "regions.sql.use", false);
@@ -175,10 +195,14 @@ public class ConfigurationManager {
     public WorldConfiguration get(World world) {
         String worldName = world.getName();
         WorldConfiguration config = worlds.get(worldName);
+        WorldConfiguration newConfig = null;
 
-        if (config == null) {
-            config = new WorldConfiguration(plugin, worldName, this.config);
-            worlds.put(worldName, config);
+        while (config == null) {
+            if (newConfig == null) {
+                newConfig = new WorldConfiguration(plugin, worldName, this.config);
+            }
+            worlds.putIfAbsent(world.getName(), newConfig);
+            config = worlds.get(world.getName());
         }
 
         return config;
@@ -211,6 +235,7 @@ public class ConfigurationManager {
      */
     @Deprecated
     public void enableGodMode(Player player) {
+
         hasGodMode.add(player.getName());
     }
 
@@ -267,7 +292,7 @@ public class ConfigurationManager {
     public boolean hasAmphibiousMode(Player player) {
         return hasAmphibious.contains(player.getName());
     }
-    
+
     public void updateCommandBookGodMode() {
         try {
             if (plugin.getServer().getPluginManager().isPluginEnabled("CommandBook")) {
@@ -278,7 +303,7 @@ public class ConfigurationManager {
         } catch (ClassNotFoundException ignore) {}
         hasCommandBookGodMode = false;
     }
-    
+
     public boolean hasCommandBookGodMode() {
         return hasCommandBookGodMode;
     }
