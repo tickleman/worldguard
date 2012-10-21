@@ -19,6 +19,7 @@
 
 package com.sk89q.worldguard.protection.flags;
 
+import org.bukkit.GameMode;
 import org.bukkit.entity.EntityType;
 
 /**
@@ -29,6 +30,7 @@ public final class DefaultFlag {
 
     public static final StateFlag PASSTHROUGH = new StateFlag("passthrough", false, RegionGroup.ALL);
     public static final StateFlag BUILD = new StateFlag("build", true, RegionGroup.NON_MEMBERS);
+    public static final RegionGroupFlag CONSTRUCT = new RegionGroupFlag("construct", RegionGroup.MEMBERS);
     public static final StateFlag PVP = new StateFlag("pvp", true, RegionGroup.ALL);
     public static final StateFlag MOB_DAMAGE = new StateFlag("mob-damage", true, RegionGroup.ALL);
     public static final StateFlag MOB_SPAWNING = new StateFlag("mob-spawning", true, RegionGroup.ALL);
@@ -58,13 +60,19 @@ public final class DefaultFlag {
     public static final StateFlag ENDER_BUILD = new StateFlag("enderman-grief", true);
     public static final StateFlag INVINCIBILITY = new StateFlag("invincible", false, RegionGroup.ALL);
     public static final StateFlag EXP_DROPS = new StateFlag("exp-drops", true, RegionGroup.ALL);
+    public static final StateFlag SEND_CHAT = new StateFlag("send-chat", true);
+    public static final StateFlag RECEIVE_CHAT = new StateFlag("receive-chat", true);
     public static final StateFlag ENTRY = new StateFlag("entry", true);
     public static final StateFlag EXIT = new StateFlag("exit", true);
+    public static final StateFlag ITEM_DROP = new StateFlag("item-drop", true);
+    public static final StateFlag ENTITY_PAINTING_DESTROY = new StateFlag("entity-painting-destroy", true);
+    public static final StateFlag POTION_SPLASH = new StateFlag("potion-splash", true);
     public static final StringFlag GREET_MESSAGE = new StringFlag("greeting", RegionGroup.ALL);
     public static final StringFlag FAREWELL_MESSAGE = new StringFlag("farewell", RegionGroup.ALL);
     public static final BooleanFlag NOTIFY_ENTER = new BooleanFlag("notify-enter", RegionGroup.ALL);
     public static final BooleanFlag NOTIFY_LEAVE = new BooleanFlag("notify-leave", RegionGroup.ALL);
     public static final SetFlag<EntityType> DENY_SPAWN = new SetFlag<EntityType>("deny-spawn", RegionGroup.ALL, new EntityTypeFlag(null));
+    public static final EnumFlag<GameMode> GAME_MODE = new EnumFlag<GameMode>("game-mode", GameMode.class, RegionGroup.ALL);
     public static final IntegerFlag HEAL_DELAY = new IntegerFlag("heal-delay", RegionGroup.ALL);
     public static final IntegerFlag HEAL_AMOUNT = new IntegerFlag("heal-amount", RegionGroup.ALL);
     public static final IntegerFlag MIN_HEAL = new IntegerFlag("heal-min-health", RegionGroup.ALL);
@@ -73,26 +81,26 @@ public final class DefaultFlag {
     public static final IntegerFlag FEED_AMOUNT = new IntegerFlag("feed-amount", RegionGroup.ALL);
     public static final IntegerFlag MIN_FOOD = new IntegerFlag("feed-min-hunger", RegionGroup.ALL);
     public static final IntegerFlag MAX_FOOD = new IntegerFlag("feed-max-hunger", RegionGroup.ALL);
-    public static final VectorFlag TELE_LOC = new VectorFlag("teleport", RegionGroup.MEMBERS);
-    public static final VectorFlag SPAWN_LOC = new VectorFlag("spawn", RegionGroup.MEMBERS);
+    public static final LocationFlag TELE_LOC = new LocationFlag("teleport", RegionGroup.MEMBERS);
+    public static final LocationFlag SPAWN_LOC = new LocationFlag("spawn", RegionGroup.MEMBERS);
     public static final BooleanFlag BUYABLE = new BooleanFlag("buyable");
     public static final DoubleFlag PRICE = new DoubleFlag("price");
     public static final SetFlag<String> BLOCKED_CMDS = new SetFlag<String>("blocked-cmds", RegionGroup.ALL, new CommandStringFlag(null));
     public static final SetFlag<String> ALLOWED_CMDS = new SetFlag<String>("allowed-cmds", RegionGroup.ALL, new CommandStringFlag(null));
 
     public static final Flag<?>[] flagsList = new Flag<?>[] {
-        PASSTHROUGH, BUILD, PVP, CHEST_ACCESS, PISTONS,
+        PASSTHROUGH, BUILD, CONSTRUCT, PVP, CHEST_ACCESS, PISTONS,
         TNT, LIGHTER, USE, PLACE_VEHICLE, DESTROY_VEHICLE, SLEEP,
         MOB_DAMAGE, MOB_SPAWNING, DENY_SPAWN, INVINCIBILITY, EXP_DROPS,
         CREEPER_EXPLOSION, ENDERDRAGON_BLOCK_DAMAGE, GHAST_FIREBALL, ENDER_BUILD,
         GREET_MESSAGE, FAREWELL_MESSAGE, NOTIFY_ENTER, NOTIFY_LEAVE,
-        EXIT, ENTRY, LIGHTNING,
+        EXIT, ENTRY, LIGHTNING, ENTITY_PAINTING_DESTROY, ITEM_DROP,
         HEAL_AMOUNT, HEAL_DELAY, MIN_HEAL, MAX_HEAL,
         FEED_DELAY, FEED_AMOUNT, MIN_FOOD, MAX_FOOD,
-        SNOW_FALL, SNOW_MELT, ICE_FORM, ICE_MELT,
-        MUSHROOMS, LEAF_DECAY, GRASS_SPREAD,
+        SNOW_FALL, SNOW_MELT, ICE_FORM, ICE_MELT, GAME_MODE,
+        MUSHROOMS, LEAF_DECAY, GRASS_SPREAD, SEND_CHAT, RECEIVE_CHAT,
         FIRE_SPREAD, LAVA_FIRE, LAVA_FLOW, WATER_FLOW,
-        TELE_LOC, SPAWN_LOC,
+        TELE_LOC, SPAWN_LOC, POTION_SPLASH,
         BLOCKED_CMDS, ALLOWED_CMDS, PRICE, BUYABLE,
     };
 

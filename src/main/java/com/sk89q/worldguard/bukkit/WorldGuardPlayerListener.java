@@ -25,6 +25,7 @@ import java.util.Set;
 import com.sk89q.worldedit.blocks.BlockID;
 import com.sk89q.worldedit.blocks.ItemID;
 import org.bukkit.ChatColor;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.block.Block;
@@ -36,14 +37,17 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerBedEnterEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
 import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerGameModeChangeEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPickupItemEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -158,19 +162,24 @@ public class WorldGuardPlayerListener implements Listener {
                     String farewell = set.getFlag(DefaultFlag.FAREWELL_MESSAGE);//, localPlayer);
                     Boolean notifyEnter = set.getFlag(DefaultFlag.NOTIFY_ENTER);//, localPlayer);
                     Boolean notifyLeave = set.getFlag(DefaultFlag.NOTIFY_LEAVE);//, localPlayer);
+                    GameMode gameMode = set.getFlag(DefaultFlag.GAME_MODE);
 
                     if (state.lastFarewell != null && (farewell == null
                             || !state.lastFarewell.equals(farewell))) {
                         String replacedFarewell = plugin.replaceMacros(
                                 player, BukkitUtil.replaceColorMacros(state.lastFarewell));
-                        player.sendMessage(ChatColor.AQUA + " ** " + replacedFarewell);
+                        for (String line : replacedFarewell.split("\n")) {
+                            player.sendMessage(ChatColor.AQUA + " ** " + line);
+                        }
                     }
 
                     if (greeting != null && (state.lastGreeting == null
                             || !state.lastGreeting.equals(greeting))) {
                         String replacedGreeting = plugin.replaceMacros(
                                 player, BukkitUtil.replaceColorMacros(greeting));
-                        player.sendMessage(ChatColor.AQUA + " ** " + replacedGreeting);
+                        for (String line : replacedGreeting.split("\n")) {
+                            player.sendMessage(ChatColor.AQUA + " ** " + line);
+                        }
                     }
 
                     if ((notifyLeave == null || !notifyLeave)
@@ -198,6 +207,21 @@ public class WorldGuardPlayerListener implements Listener {
                                 + regionList);
                     }
 
+                    if (!hasBypass && gameMode != null) {
+                        if (player.getGameMode() != gameMode) {
+                            state.lastGameMode = player.getGameMode();
+                            player.setGameMode(gameMode);
+                        } else if (state.lastGameMode == null) {
+                            state.lastGameMode = player.getServer().getDefaultGameMode();
+                        }
+                    } else {
+                        if (state.lastGameMode != null) {
+                            GameMode mode = state.lastGameMode;
+                            state.lastGameMode = null;
+                            player.setGameMode(mode);
+                        }
+                    }
+
                     state.lastGreeting = greeting;
                     state.lastFarewell = farewell;
                     state.notifiedForEnter = notifyEnter;
@@ -212,7 +236,22 @@ public class WorldGuardPlayerListener implements Listener {
         }
 	}
 
-    @SuppressWarnings("deprecation")
+    @EventHandler
+    public void onPlayerGameModeChange(PlayerGameModeChangeEvent event) {
+        Player player = event.getPlayer();
+        WorldConfiguration wcfg = plugin.getGlobalStateManager().get(player.getWorld());
+        if (wcfg.useRegions && !plugin.getGlobalRegionManager().hasBypass(player, player.getWorld())) {
+            GameMode gameMode = plugin.getGlobalRegionManager().get(player.getWorld())
+                    .getApplicableRegions(player.getLocation()).getFlag(DefaultFlag.GAME_MODE);
+            if (plugin.getFlagStateManager().getState(player).lastGameMode != null
+                    && gameMode != null && event.getNewGameMode() != gameMode) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.RED + "Your game mode is locked to "
+                        + gameMode + "in this region!");
+            }
+        }
+    }
+
     @EventHandler
     public void onPlayerJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
@@ -261,6 +300,52 @@ public class WorldGuardPlayerListener implements Listener {
             state.lastBlockX = loc.getBlockX();
             state.lastBlockY = loc.getBlockY();
             state.lastBlockZ = loc.getBlockZ();
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPlayerChat(AsyncPlayerChatEvent event) {
+        Player player = event.getPlayer();
+        WorldConfiguration wcfg = plugin.getGlobalStateManager().get(player.getWorld());
+        if (wcfg.useRegions) {
+            if (!plugin.getGlobalRegionManager().allows(DefaultFlag.SEND_CHAT, player.getLocation())) {
+                player.sendMessage(ChatColor.RED + "You don't have permission to chat in this region!");
+                event.setCancelled(true);
+                return;
+            }
+
+            for (Iterator<Player> i = event.getRecipients().iterator(); i.hasNext();) {
+                if (!plugin.getGlobalRegionManager().allows(DefaultFlag.RECEIVE_CHAT, i.next().getLocation())) {
+                    i.remove();
+                }
+            }
+            if (event.getRecipients().size() == 0) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    @EventHandler(ignoreCancelled = true)
+    public void onPlayerLogin(PlayerLoginEvent event) {
+        Player player = event.getPlayer();
+        ConfigurationManager cfg = plugin.getGlobalStateManager();
+
+        String hostKey = cfg.hostKeys.get(player.getName().toLowerCase());
+        if (hostKey != null) {
+            String hostname = event.getHostname();
+            int colonIndex = hostname.indexOf(':');
+            if (colonIndex != -1) {
+                hostname = hostname.substring(0, colonIndex);
+            }
+
+            if (!hostname.equals(hostKey)) {
+                event.disallow(PlayerLoginEvent.Result.KICK_OTHER,
+                        "You did not join with the valid host key!");
+                plugin.getLogger().warning("WorldGuard host key check: " +
+                        player.getName() + " joined with '" + hostname +
+                        "' but '" + hostKey + "' was expected. Kicked!");
+                return;
+            }
         }
     }
 
@@ -582,7 +667,8 @@ public class WorldGuardPlayerListener implements Listener {
 
             if (type == BlockID.CAKE_BLOCK) {
                 if (!plugin.getGlobalRegionManager().hasBypass(player, world)
-                        && !set.canBuild(localPlayer)) {
+                        && !set.canBuild(localPlayer)
+                        && !set.allows(DefaultFlag.USE, localPlayer)) {
                     player.sendMessage(ChatColor.DARK_RED + "You're not invited to this tea party!");
                     event.setUseInteractedBlock(Result.DENY);
                     event.setCancelled(true);
@@ -822,14 +908,18 @@ public class WorldGuardPlayerListener implements Listener {
         }
     }*/
 
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerDropItem(PlayerDropItemEvent event) {
-        if (event.isCancelled()) {
-            return;
-        }
-
         ConfigurationManager cfg = plugin.getGlobalStateManager();
         WorldConfiguration wcfg = cfg.get(event.getPlayer().getWorld());
+        Player player = event.getPlayer();
+
+        if (wcfg.useRegions) {
+            if (!plugin.getGlobalRegionManager().allows(DefaultFlag.ITEM_DROP, player.getLocation())) {
+                event.setCancelled(true);
+                player.sendMessage(ChatColor.RED + "You don't have permission to do that in this area.");
+            }
+        }
 
         if (wcfg.getBlacklist() != null) {
             Item ci = event.getItemDrop();
@@ -843,12 +933,8 @@ public class WorldGuardPlayerListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerPickupItem(PlayerPickupItemEvent event) {
-        if (event.isCancelled()) {
-            return;
-        }
-
         ConfigurationManager cfg = plugin.getGlobalStateManager();
         WorldConfiguration wcfg = cfg.get(event.getPlayer().getWorld());
 
@@ -865,7 +951,7 @@ public class WorldGuardPlayerListener implements Listener {
     }
 
 
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerBucketFill(PlayerBucketFillEvent event) {
         Player player = event.getPlayer();
         World world = player.getWorld();
@@ -890,7 +976,7 @@ public class WorldGuardPlayerListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerBucketEmpty(PlayerBucketEmptyEvent event) {
         Player player = event.getPlayer();
         World world = player.getWorld();
@@ -929,10 +1015,10 @@ public class WorldGuardPlayerListener implements Listener {
             ApplicableRegionSet set = mgr.getApplicableRegions(pt);
 
             LocalPlayer localPlayer = plugin.wrapPlayer(player);
-            Vector spawn = set.getFlag(DefaultFlag.SPAWN_LOC, localPlayer);
+            com.sk89q.worldedit.Location spawn = set.getFlag(DefaultFlag.SPAWN_LOC, localPlayer);
 
             if (spawn != null) {
-                event.setRespawnLocation(BukkitUtil.toLocation(player.getWorld(), spawn));
+                event.setRespawnLocation(com.sk89q.worldedit.bukkit.BukkitUtil.toLocation(spawn));
             }
         }
     }
@@ -955,12 +1041,8 @@ public class WorldGuardPlayerListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.HIGH)
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerBedEnter(PlayerBedEnterEvent event) {
-        if (event.isCancelled()) {
-            return;
-        }
-
         Player player = event.getPlayer();
         Location location = player.getLocation();
 
@@ -981,7 +1063,7 @@ public class WorldGuardPlayerListener implements Listener {
         }
     }
 
-    @EventHandler(priority = EventPriority.LOWEST)
+    @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onPlayerCommandPreprocess(PlayerCommandPreprocessEvent event) {
         Player player = event.getPlayer();
         LocalPlayer localPlayer = plugin.wrapPlayer(player);
@@ -993,27 +1075,23 @@ public class WorldGuardPlayerListener implements Listener {
             Vector pt = toVector(player.getLocation());
             RegionManager mgr = plugin.getGlobalRegionManager().get(world);
             ApplicableRegionSet set = mgr.getApplicableRegions(pt);
-            ProtectedRegion globalRegion = mgr.getRegion("__global__");
 
             String[] parts = event.getMessage().split(" ");
+            String lowerCommand = parts[0].toLowerCase();
 
             Set<String> allowedCommands = set.getFlag(DefaultFlag.ALLOWED_CMDS, localPlayer);
-            if (allowedCommands == null && globalRegion != null) {
-                allowedCommands = globalRegion.getFlag(DefaultFlag.ALLOWED_CMDS);
-            }
-            if (allowedCommands != null && !allowedCommands.contains(parts[0].toLowerCase())) {
+            Set<String> blockedCommands = set.getFlag(DefaultFlag.BLOCKED_CMDS, localPlayer);
 
-                player.sendMessage(ChatColor.RED + parts[0].toLowerCase() + " is not allowed in this area.");
+            if (allowedCommands != null && !allowedCommands.contains(lowerCommand)
+                    && (blockedCommands == null || blockedCommands.contains(lowerCommand))) {
+                player.sendMessage(ChatColor.RED + lowerCommand + " is not allowed in this area.");
                 event.setCancelled(true);
                 return;
             }
 
-            Set<String> blockedCommands = set.getFlag(DefaultFlag.BLOCKED_CMDS, localPlayer);
-            if (blockedCommands == null && globalRegion != null) {
-                blockedCommands = globalRegion.getFlag(DefaultFlag.BLOCKED_CMDS);
-            }
-            if (blockedCommands != null && blockedCommands.contains(parts[0].toLowerCase())) {
-                player.sendMessage(ChatColor.RED + parts[0].toLowerCase() + " is blocked in this area.");
+            if (blockedCommands != null && blockedCommands.contains(lowerCommand)
+                    && (allowedCommands == null || !allowedCommands.contains(lowerCommand))) {
+                player.sendMessage(ChatColor.RED + lowerCommand + " is blocked in this area.");
                 event.setCancelled(true);
                 return;
             }

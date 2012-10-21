@@ -97,6 +97,8 @@ public class WorldConfiguration {
     public boolean blockEnderDragonBlockDamage;
     public boolean blockFireballExplosions;
     public boolean blockFireballBlockDamage;
+    public boolean blockEntityPaintingDestroy;
+    public boolean blockPluginSpawning;
     public boolean disableContactDamage;
     public boolean disableFallDamage;
     public boolean disableLavaDamage;
@@ -145,7 +147,7 @@ public class WorldConfiguration {
     public boolean regionInvinciblityRemovesMobs;
     public boolean disableDeathMessages;
     public boolean disableObsidianGenerators;
-    
+
     private Map<String, Integer> maxRegionCounts;
 
     /* Configuration data end */
@@ -172,7 +174,7 @@ public class WorldConfiguration {
         config = new YAMLProcessor(configFile, true, YAMLFormat.EXTENDED);
         loadConfiguration();
 
-        plugin.getLogger().info("Loaded configuration for world '" + worldName + '"');
+        plugin.getLogger().info("Loaded configuration for world '" + worldName + "'");
     }
 
     private boolean getBoolean(String node, boolean def) {
@@ -313,6 +315,8 @@ public class WorldConfiguration {
         blockFireballBlockDamage = getBoolean("mobs.block-fireball-block-damage", false);
         antiWolfDumbness = getBoolean("mobs.anti-wolf-dumbness", false);
         disableEndermanGriefing = getBoolean("mobs.disable-enderman-griefing", false);
+        blockEntityPaintingDestroy = getBoolean("mobs.block-painting-destroy", false);
+        blockPluginSpawning = getBoolean("mobs.block-plugin-spawning", true);
 
         disableFallDamage = getBoolean("player-damage.disable-fall-damage", false);
         disableLavaDamage = getBoolean("player-damage.disable-lava-damage", false);
@@ -357,11 +361,11 @@ public class WorldConfiguration {
         regionWand = getInt("regions.wand", 287);
         maxClaimVolume = getInt("regions.max-claim-volume", 30000);
         claimOnlyInsideExistingRegions = getBoolean("regions.claim-only-inside-existing-regions", false);
-        
+
         maxRegionCountPerPlayer = getInt("regions.max-region-count-per-player.default", 7);
         maxRegionCounts = new HashMap<String, Integer>();
         maxRegionCounts.put(null, maxRegionCountPerPlayer);
-        
+
         for (String key : getKeys("regions.max-region-count-per-player")) {
             if (!key.equalsIgnoreCase("default")) {
                 Object val = getProperty("regions.max-region-count-per-player." + key);
@@ -529,7 +533,7 @@ public class WorldConfiguration {
     public ChestProtection getChestProtection() {
         return chestProtection;
     }
-    
+
     public int getMaxRegionCount(Player player) {
         int max = -1;
         for (String group : plugin.getGroups(player)) {
